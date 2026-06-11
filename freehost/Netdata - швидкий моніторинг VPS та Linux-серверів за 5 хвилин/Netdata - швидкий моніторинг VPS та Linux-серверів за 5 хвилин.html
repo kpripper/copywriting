@@ -1,0 +1,555 @@
+<p><strong>TITLE:</strong><br>
+Netdata: система моніторингу VPS та Linux-серверів — Хостинг-компанія FREEhost.UA</p>
+
+<p><strong>Description:</strong><br>
+Використання інструмента на Ubuntu 24.04 і Debian 13: встановлення, перший запуск, моніторинг CPU, RAM, I/O pressure, дисків, мережі, PHP-FPM, MySQL/MariaDB та сповіщення для VPS.</p>
+
+        <h1>Netdata: швидкий моніторинг VPS та Linux-серверів за 5 хвилин</h1>
+
+        <p>
+            Коли сайт працює на VPS, адміністратору потрібно бачити не тільки
+            факт доступності сервера. Важливо швидко зрозуміти, що саме
+            сповільнює сервер: CPU, RAM, диск, мережа, PHP-FPM чи база даних.
+            Команди <code>top</code>, <code>free</code>, <code>df</code> і
+            <code>ss</code> допомагають, але для нормальної діагностики потрібні
+            графіки, історія метрик і сповіщення.
+        </p>
+
+        <p>
+            Інструмент добре підходить для такого старту. Це система моніторингу
+            сервера, яку можна встановити за кілька хвилин і одразу отримати
+            моніторинг VPS у веб-панелі. Рішення зручне для одного
+            Linux-сервера, тестового стенда або невеликого production-проєкту.
+            Якщо ви тільки запускаєте сайт, можна почати з сервера на
+            <a href="https://freehost.com.ua/ukr/vps-hosting/"
+                >VPS-хостингу Freehost
+            </a>
+            і відразу налаштувати базовий контроль стану сервера.
+        </p>
+
+        <h2>Навіщо моніторити сервер</h2>
+
+        <p>Моніторинг Linux-сервера потрібен для практичних завдань:</p>
+
+        <ul>
+            <li>чи справді процесор є вузьким місцем;</li>
+            <li>чи не йде система у swap після релізу;</li>
+            <li>чи не ростуть затримки дискових операцій;</li>
+            <li>чи вистачає PHP-FPM workers під піковим трафіком;</li>
+            <li>чи не забивається дисковий простір логами або бекапами;</li>
+            <li>чи є проблеми з cron, backup або деплоєм.</li>
+        </ul>
+
+        <p>
+            Без історії метрик адміністратор бачить тільки поточний стан. Саме
+            тому моніторинг продуктивності сервера має показувати не лише
+            відсоток CPU, а й load average, iowait, steal time, swap, I/O
+            pressure, мережевий трафік і стан сервісів. Якщо одночасно ростуть
+            load average, iowait і latency диска, варто перевіряти диск або
+            базу. Якщо CPU зайнятий, але iowait низький, шукайте процес, чергу
+            PHP-FPM або важкі запити застосунку. Такий підхід робить моніторинг
+            сервера корисним не тільки під час аварій, а й для планового
+            контролю навантаження сервера.
+        </p>
+
+        <h2>Що таке Netdata</h2>
+
+        <p>
+            Це інструмент і веб-інтерфейс моніторингу, який виконує збір метрик
+            і показує серверні метрики майже в реальному часі. Після інсталяції
+            одразу доступні системні показники: CPU, RAM, swap, диски, файлові
+            системи, мережа, сокети, процеси, systemd-сервіси та Linux PSI.
+        </p>
+
+        <p>
+            PSI, або Pressure Stall Information, особливо корисний для VPS: він
+            показує, скільки часу задачі втрачають через конкуренцію за CPU,
+            пам'ять або I/O. Для віртуального сервера це часто точніший сигнал,
+            ніж один графік завантаження.
+        </p>
+
+        <p>
+            Також є колектори для Nginx, Apache, PHP-FPM, MySQL, MariaDB,
+            PostgreSQL, Redis і Docker. Частина графіків з'являється
+            автоматично, а для прикладних сервісів зазвичай треба додати job у
+            YAML-конфігурацію.
+        </p>
+
+        <h2>Встановлення на Ubuntu 24.04 / Debian 13</h2>
+
+        <p>
+            Для встановлення Netdata на Ubuntu 24.04 або Netdata Debian 13
+            найпростіше використати офіційний <code>kickstart.sh</code>. Такий
+            сценарій Netdata Ubuntu 24.04 підходить і для нового VPS, і для
+            тестового стенда. Скрипт визначає дистрибутив і на підтримуваних
+            системах ставить native packages. Для production-сервера краще явно
+            обрати stable-канал.
+        </p>
+
+        <pre>
+wget -O /tmp/netdata-kickstart.sh https://get.netdata.cloud/kickstart.sh
+sudo sh /tmp/netdata-kickstart.sh --release-channel stable --non-interactive
+</pre
+        >
+
+        <p>Перед запуском install-скрипт можна переглянути:</p>
+
+        <pre>
+less /tmp/netdata-kickstart.sh
+</pre
+        >
+
+        <p>Після інсталяції перевірте сервіс і порт:</p>
+
+        <pre>
+systemctl status netdata
+netdata -v
+ss -lntp | grep 19999
+</pre
+        >
+
+        <p>
+            На публічному VPS не варто відкривати порт <code>19999</code> для
+            всього інтернету. Для першого запуску безпечніше використати
+            SSH-тунель:
+        </p>
+
+        <pre>
+ssh -L 19999:127.0.0.1:19999 user@server
+</pre
+        >
+
+        <p>Після цього відкрийте локально:</p>
+
+        <pre>
+http://localhost:19999
+</pre
+        >
+
+        <p>
+            Для невеликого сервера зазвичай достатньо stable-каналу й
+            стандартних автооновлень. Якщо оновлення контролюються вручну, під
+            час інсталяції можна додати <code>--no-updates</code>.
+        </p>
+
+        <h3>Пакети для тестового навантаження</h3>
+
+        <p>
+            Щоб одразу побачити графіки продуктивності, встановіть базові
+            сервіси й утиліти:
+        </p>
+
+        <pre>
+sudo apt update
+sudo apt install -y nginx php-fpm php-cli php-mysql mariadb-server
+sudo apt install -y stress-ng fio sysbench apache2-utils iperf3
+</pre
+        >
+
+        <p>
+            Цього вистачить, щоб перевірити моніторинг ресурсів сервера, CPU,
+            I/O pressure, мережу, моніторинг PHP-FPM і метрики MySQL/MariaDB.
+        </p>
+
+        <h2>Перший запуск</h2>
+
+        <p>
+            Після входу в панель видно вузол, часовий діапазон, live-оновлення,
+            алерти та розділи System, Network, Storage, Applications і
+            Processes. Для початківців це зручно: основні метрики не треба
+            збирати вручну з різних утиліт. Для адміністраторів цінність у
+            деталях: можна швидко зіставити кілька графіків за один проміжок
+            часу й оцінити навантаження на систему.
+        </p>
+
+        <p>Перший тест:</p>
+
+        <pre>
+stress-ng --cpu 2 --vm 1 --vm-bytes 256M --timeout 90s --metrics-brief
+</pre
+        >
+
+        <p>
+            Через кілька секунд у панелі буде видно стрибок CPU, load average,
+            активність RAM і pressure-метрики. Так працює моніторинг у реальному
+            часі: навантаження створюється зараз, а графік реагує майже одразу.
+        </p>
+
+        <p>
+            <em
+                >МІСЦЕ ДЛЯ СКРІНШОТА 1: Overview або System -&gt; CPU/RAM під
+                час <code>stress-ng</code></em
+            >
+        </p>
+
+        <p>
+            <em
+                >Підпис до зображення: Навантаження CPU та RAM під час
+                <code>stress-ng</code>: видно стрибок використання процесора,
+                load average, активність пам'яті та CPU pressure у реальному
+                часі.</em
+            >
+        </p>
+
+        <h2>Огляд інтерфейсу</h2>
+
+        <p>
+            Панель керування моніторингом побудована навколо інтерактивних
+            графіків. У кожному блоці можна змінити часовий діапазон, зупинити
+            live-оновлення, подивитися окремі dimensions і збільшити потрібний
+            проміжок.
+        </p>
+
+        <p>Після встановлення в першу чергу варто перевірити:</p>
+
+        <ul>
+            <li>CPU usage, load average, interrupts, softirqs;</li>
+            <li>memory, swap, available RAM, page faults;</li>
+            <li>disks, IOPS, bandwidth, utilization, latency;</li>
+            <li>filesystem usage та inode usage;</li>
+            <li>network traffic, drops, errors, TCP sockets;</li>
+            <li>PSI для CPU, memory та I/O;</li>
+            <li>alerts, які вже активні.</li>
+        </ul>
+
+        <p>
+            Такий веб-інтерфейс моніторингу не замінює логи, але скорочує шлях
+            до пошуку проблеми: діагностика несправностей починається з
+            графіків, а не з припущень. Якщо в логах Nginx видно повільні
+            відповіді, у панелі можна одразу перевірити, що в цей момент було з
+            PHP-FPM, диском, базою даних і RAM.
+        </p>
+
+        <h2>Моніторинг CPU, RAM, дисків та мережі</h2>
+
+        <p>
+            Для CPU дивіться не тільки на "100%". Важливі
+            user/system/steal/iowait, load average, runnable processes і CPU
+            pressure. Для моніторингу ресурсів сервера це базові метрики, без
+            яких контроль навантаження сервера буде неточним. На VPS окремо
+            корисний steal time: якщо він росте, частину процесорного часу
+            забирає гіпервізор або сусіднє навантаження на фізичному вузлі, а
+            загальне навантаження на систему виглядає нестабільним.
+        </p>
+
+        <p>
+            Для RAM головні сигнали - available memory, завантаження оперативної
+            пам'яті, swap activity, major page faults і memory pressure. Linux
+            активно використовує кеш, тому "used memory" сам по собі не є
+            проблемою. Проблема починається тоді, коли процеси чекають пам'ять
+            або система активно працює зі swap.
+        </p>
+
+        <p>Для дисків запустіть короткий <code>fio</code>:</p>
+
+        <pre>
+fio --name=netdata-disk-demo --filename=/tmp/netdata-fio-demo \
+  --size=512M --rw=randrw --bs=4k --runtime=90 \
+  --time_based --group_reporting
+rm -f /tmp/netdata-fio-demo
+</pre
+        >
+
+        <p>
+            У Storage перевірте IOPS, read/write bandwidth, utilization, latency
+            та I/O pressure. Якщо диск перевантажений, CPU може просто чекати
+            завершення операцій, а продуктивність веб-сайту падатиме без
+            очевидного процесорного піку.
+        </p>
+
+        <p>
+            <em
+                >МІСЦЕ ДЛЯ СКРІНШОТА 2: System -&gt; Pressure або Storage -&gt;
+                Disks під час <code>fio</code></em
+            >
+        </p>
+
+        <p>
+            <em
+                >Підпис до зображення: I/O pressure і дискові метрики під час
+                <code>fio</code>: видно зростання затримок дискових операцій,
+                IOPS та активності читання/запису. Такий екран допомагає
+                оцінити, чи накопичувач не став вузьким місцем VPS.</em
+            >
+        </p>
+
+        <p>
+            Для мережі дивіться inbound/outbound traffic, packets, drops,
+            errors, TCP sockets і retransmits. Якщо одночасно ростуть
+            HTTP-запити, активні PHP-FPM connections і мережевий трафік,
+            навантаження йде від реальних користувачів або ботів. Якщо мережа
+            тиха, а CPU і диск зайняті, перевіряйте cron, backup, черги або
+            фоновий імпорт.
+        </p>
+
+        <h2>Контроль навантаження PHP-FPM</h2>
+
+        <p>
+            Моніторинг PHP-FPM потребує status page. У pool-конфігурації,
+            зазвичай <code>/etc/php/*/fpm/pool.d/www.conf</code>, увімкніть:
+        </p>
+
+        <pre>
+pm.status_path = /status
+</pre
+        >
+
+        <p>Перезапустіть службу:</p>
+
+        <pre>
+sudo systemctl restart php*-fpm
+</pre
+        >
+
+        <p>
+            Endpoint краще віддати через Nginx тільки для localhost. Socket
+            змініть під свою версію PHP:
+        </p>
+
+        <pre>
+location ~ ^/(status|ping)$ {
+    allow 127.0.0.1;
+    deny all;
+    fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+    include fastcgi_params;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+}
+</pre
+        >
+
+        <p>Перевірка:</p>
+
+        <pre>
+curl http://127.0.0.1/status
+</pre
+        >
+
+        <p>Далі відкрийте конфігурацію collector:</p>
+
+        <pre>
+cd /etc/netdata 2>/dev/null || cd /opt/netdata/etc/netdata
+sudo ./edit-config go.d/phpfpm.conf
+</pre
+        >
+
+        <p>Мінімальний job:</p>
+
+        <pre>
+jobs:
+  - name: local
+    url: http://localhost/status?full&amp;json
+</pre
+        >
+
+        <p>Перезапустіть агент і створіть HTTP-навантаження:</p>
+
+        <pre>
+sudo systemctl restart netdata
+ab -n 5000 -c 40 http://127.0.0.1/
+</pre
+        >
+
+        <p>
+            У Applications -&gt; PHP-FPM мають з'явитися active/idle
+            connections, requests per second, slow requests, max children
+            reached, request duration, request CPU і request memory. Для
+            WordPress, Laravel або Symfony це швидкий спосіб зрозуміти, чи
+            вистачає <code>pm.max_children</code>, чи потрібне кешування, чи
+            проблема нижче - у SQL-запитах або диску.
+        </p>
+
+        <p>
+            <em
+                >МІСЦЕ ДЛЯ СКРІНШОТА 3: Applications -&gt; PHP-FPM під час
+                <code>ab</code></em
+            >
+        </p>
+
+        <p>
+            <em
+                >Підпис до зображення: Графіки PHP-FPM під тестовим
+                HTTP-навантаженням: видно активні підключення, requests per
+                second, request duration і можливі спрацювання
+                <code>max children reached</code>.</em
+            >
+        </p>
+
+        <h2>Моніторинг MySQL/MariaDB</h2>
+
+        <p>
+            Моніторинг MySQL і моніторинг MariaDB працює через collector
+            <code>mysql</code>. Він підключається через TCP або Unix socket і
+            читає global status, InnoDB status, змінні сервера, replication
+            status, connections, queries, handlers та locks.
+        </p>
+
+        <p>
+            Для production створіть окремого користувача. Для MySQL і MariaDB до
+            10.5.9:
+        </p>
+
+        <pre>
+CREATE USER 'netdata'@'localhost';
+GRANT USAGE, REPLICATION CLIENT, PROCESS ON *.* TO 'netdata'@'localhost';
+FLUSH PRIVILEGES;
+</pre
+        >
+
+        <p>Для MariaDB 10.5.9+ використовуйте <code>SLAVE MONITOR</code>:</p>
+
+        <pre>
+CREATE USER 'netdata'@'localhost';
+GRANT USAGE, SLAVE MONITOR, PROCESS ON *.* TO 'netdata'@'localhost';
+FLUSH PRIVILEGES;
+</pre
+        >
+
+        <p>Конфігурація:</p>
+
+        <pre>
+cd /etc/netdata 2>/dev/null || cd /opt/netdata/etc/netdata
+sudo ./edit-config go.d/mysql.conf
+</pre
+        >
+
+        <p>TCP-приклад:</p>
+
+        <pre>
+jobs:
+  - name: local
+    dsn: netdata@tcp(127.0.0.1:3306)/
+</pre
+        >
+
+        <p>Unix socket:</p>
+
+        <pre>
+jobs:
+  - name: local
+    dsn: netdata@unix(/run/mysqld/mysqld.sock)/
+</pre
+        >
+
+        <p>Для тесту використайте <code>sysbench</code>:</p>
+
+        <pre>
+sudo mariadb -e "CREATE DATABASE IF NOT EXISTS sbtest;"
+sudo sysbench oltp_read_write --db-driver=mysql \
+  --mysql-socket=/run/mysqld/mysqld.sock --mysql-user=root \
+  --mysql-db=sbtest --tables=2 --table-size=20000 prepare
+sudo sysbench oltp_read_write --db-driver=mysql \
+  --mysql-socket=/run/mysqld/mysqld.sock --mysql-user=root \
+  --mysql-db=sbtest --tables=2 --table-size=20000 \
+  --time=90 --threads=4 run
+sudo sysbench oltp_read_write --db-driver=mysql \
+  --mysql-socket=/run/mysqld/mysqld.sock --mysql-user=root \
+  --mysql-db=sbtest --tables=2 cleanup
+</pre
+        >
+
+        <p>
+            Під час тесту дивіться не тільки queries per second. Корисніші
+            зв'язки: InnoDB reads/writes, buffer pool, locks, temporary tables,
+            threads connected/running і одночасна активність диска. Якщо база
+            впирається в I/O, це буде видно і в графіках Storage.
+        </p>
+
+        <p>
+            <em
+                >МІСЦЕ ДЛЯ СКРІНШОТА 4: Applications -&gt; MySQL/MariaDB під час
+                <code>sysbench</code></em
+            >
+        </p>
+
+        <p>
+            <em
+                >Підпис до зображення: Метрики MariaDB під час
+                <code>sysbench</code>: видно активні підключення, SQL-запити,
+                InnoDB-активність і зв'язок із дисковим навантаженням.</em
+            >
+        </p>
+
+        <h2>Сповіщення про проблеми</h2>
+
+        <p>
+            Інструмент має вбудований health monitoring. Типові правила уже
+            налаштовані з коробки, а власні alert definitions краще зберігати в
+            <code>/etc/netdata/health.d</code>, щоб оновлення пакета не
+            перезаписували зміни.
+        </p>
+
+        <p>На старті перевірте алерти для таких ситуацій:</p>
+
+        <ul>
+            <li>заповнення диска та inode usage;</li>
+            <li>RAM, swap і memory pressure;</li>
+            <li>CPU load, iowait і steal time;</li>
+            <li>disk latency та I/O utilization;</li>
+            <li>недоступність сервісів;</li>
+            <li>помилки collector jobs.</li>
+        </ul>
+
+        <p>
+            Автоматичні алерти не замінюють аналіз, але прискорюють виявлення
+            перевантажень. Якщо система моніторингу сервера повідомляє про диск,
+            пам'ять або latency, адмін реагує до того, як проблема стане
+            інцидентом для користувачів. Для одного сервера достатньо залишити
+            стандартні правила, налаштувати критичний канал повідомлень і
+            протягом тижня подивитися, які warnings повторюються. Це простий
+            спосіб підтримувати контроль навантаження сервера без постійного
+            ручного перегляду графіків.
+        </p>
+
+        <h2>Переваги та недоліки</h2>
+
+        <h3>Переваги</h3>
+
+        <ul>
+            <li>встановлення Netdata займає кілька хвилин;</li>
+            <li>базовий моніторинг VPS з'являється без довгої конфігурації;</li>
+            <li>є моніторинг у реальному часі з високою деталізацією;</li>
+            <li>
+                CPU, RAM, диски, мережа й PSI доступні одразу після запуску;
+            </li>
+            <li>можна додати PHP-FPM, MySQL, MariaDB та інші колектори;</li>
+            <li>
+                локальний доступ через SSH-тунель не вимагає відкривати порт.
+            </li>
+        </ul>
+
+        <h3>Недоліки</h3>
+
+        <ul>
+            <li>прикладні сервіси часто потребують окремого collector job;</li>
+            <li>велика кількість графіків спершу може перевантажувати;</li>
+            <li>
+                для командної роботи та централізованих нотифікацій зручніше
+                підключати Cloud;
+            </li>
+            <li>
+                на слабких VPS треба стежити за retention і дисковим простором;
+            </li>
+            <li>
+                порт <code>19999</code> не можна залишати публічним без контролю
+                доступу;
+            </li>
+            <li>це не повна observability-платформа для великого кластера.</li>
+        </ul>
+
+        <p>
+            Це хороший варіант, коли потрібен швидкий моніторинг сервера без
+            складної архітектури. За кілька хвилин можна отримати дані по
+            серверу, побачити CPU, RAM, I/O pressure, диски, мережу, PHP-FPM і
+            MariaDB, а потім поступово додати алерти та власні налаштування. Для
+            невеликого проєкту це практична система моніторингу сервера, з якої
+            можна починати моніторинг Linux-сервера без окремого стеку
+            observability.
+        </p>
+
+        <p>
+            Цінність цього інструменту у простоті: встановив агент, відкрив
+            панель, побачив графіки продуктивності. Для досвідчених адмінів
+            користь у деталях: PSI, iowait, steal time, InnoDB, активні PHP-FPM
+            connections, системні показники й швидка кореляція між подіями. Саме
+            тому цей інструмент варто ставити одразу після запуску VPS.
+        </p>
